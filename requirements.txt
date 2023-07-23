@@ -1,0 +1,3 @@
+vega-datasets
+streamlit
+unidecode
