@@ -37,6 +37,9 @@ model_name = st.sidebar.selectbox('Modelo preditivo:', ['ARIMA', 'Prophet'])
 # Filtrar o DataFrame com base nas opções selecionadas no filtro
 df_filtrado = df_receita_despesa[df_receita_despesa['Unidade Gestora'] == filtro_unidade_gestora]
 
+# Renomear as colunas para que o modelo possa reconhecê-las
+df_filtrado = df_filtrado.rename(columns={'Vlr. Receita Realizada': 'y'})
+
 # Criar uma barra deslizante (slider) para selecionar a variável exógerna
 op_exog = st.sidebar.selectbox('Usar variável exógena?:', ['Sim', 'Não'])
 
@@ -47,10 +50,6 @@ if op_exog == 'Sim':
 
     # Criar uma barra deslizante (slider) para selecionar a porcentagem
     porcentagem = st.sidebar.slider('% vs. Var. Exógena:', min_value=0, max_value=100, value=100, step=1)
-
-
-    # Renomear as colunas para que o Prophet possa reconhecê-las
-    df_filtrado = df_filtrado.rename(columns={'Vlr. Receita Realizada': 'y'})
 
     # Aplicar a função ao DataFrame para criar uma nova coluna com os valores multiplicados
     df_filtrado[exog_var] = df_filtrado[exog_var] * (porcentagem / 100)
@@ -64,6 +63,7 @@ if op_exog == 'Sim':
 
 
 else:
+
     # Criar o modelo de previsão
     if model_name == 'ARIMA':
         predictions = predict_ARIMA(df=df_filtrado, n_periods=n_periods, exog_var=None)

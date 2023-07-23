@@ -189,9 +189,9 @@ def create_test_data(train, n_periods, exog_var):
 
     test = pd.DataFrame(get_date_range(start_date, end_date), columns=['ds'])
     test['ds'] = pd.to_datetime(test['ds'])
-
-    # Adicionando a coluna 'y' em test com os valores médios dos últimos anos
-    test[exog_var] = test['ds'].apply(lambda date: train[train['ds'].dt.year == date.year - 1][exog_var].mean())
+    if exog_var != None:
+        # Adicionando a coluna 'y' em test com os valores médios dos últimos anos
+        test[exog_var] = test['ds'].apply(lambda date: train[train['ds'].dt.year == date.year - 1][exog_var].mean())
 
     return test
 
@@ -210,7 +210,7 @@ def predict_ARIMA(df, n_periods, exog_var=None):
     train.set_index('ds', inplace=True)
     test.set_index('ds', inplace=True)
 
-    if exog_var is not None:
+    if exog_var != None:
         # Treinamento do modelo SARIMAX com a variável exógena
         model = SARIMAX(train["y"], order=(5, 1, 1), exog=train[exog_var])
     else:
@@ -236,7 +236,7 @@ def predict_ARIMA(df, n_periods, exog_var=None):
     predictions = pd.concat([train.reset_index().rename(columns={'y': 'yhat'})[predictions.columns].tail(1), predictions])
     return predictions
 
-def predict_prophet(df, n_periods, exog_var='Não'):
+def predict_prophet(df, n_periods, exog_var=None):
     # Criar o modelo de previsão
     model = Prophet()
 
