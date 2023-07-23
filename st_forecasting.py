@@ -70,6 +70,7 @@ else:
 
 
 st.write(df_filtrado)
+
 #
 # # Criar o gráfico de linhas
 fig = go.Figure()

@@ -1,5 +1,3 @@
-from import_packages import *
-
 # Função para remover acentos usando a biblioteca unidecode
 def remove_accent(text):
     return unidecode(text)
