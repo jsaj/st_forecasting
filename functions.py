@@ -1,3 +1,14 @@
+
+import re
+from datetime import datetime
+
+import pandas as pd
+from dateutil.relativedelta import relativedelta
+from prophet import Prophet
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from unidecode import unidecode
+
+
 # Função para remover acentos usando a biblioteca unidecode
 def remove_accent(text):
     return unidecode(text)
@@ -238,12 +249,6 @@ def predict_prophet(df, n_periods, exog_var='Não'):
     test = create_test_data(train, n_periods, exog_var)
 
     model.fit(train)
-
-    # Criar dataframe com as datas futuras para prever os próximos 2 meses
-    # futuro = modelo.make_future_dataframe(periods=n_periods, freq='M')
-    # print(futuro)
-    # if exog_var != None:
-        # futuro = futuro.merge(test[['ds', exog_var]], how='left', on='ds').fillna(0)
 
     predictions = model.predict(test)
 
