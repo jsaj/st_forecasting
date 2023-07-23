@@ -1,5 +1,3 @@
-import pandas as pd
-
 from import_packages import *
 
 # Função para remover acentos usando a biblioteca unidecode
@@ -21,143 +19,143 @@ def simplify_name(name):
 def replace_value_by_id(df, id_col, id_name):
     return df.groupby(id_col)[id_name].transform(lambda x: simplify_name(x.iloc[0]) if x.iloc[0].count(r"(.)\1+") > 1 else x.iloc[0])
 
-def read_receita():
-    meses = [
-        "JANEIRO",
-        "FEVEREIRO",
-        "MARCO",
-        "ABRIL",
-        "MAIO",
-        "JUNHO",
-        "JULHO",
-        "AGOSTO",
-        "SETEMBRO",
-        "OUTUBRO",
-        "NOVEMBRO",
-        "DEZEMBRO"
-    ]
-
-    anos = [2021, 2022, 2023]
-
-    df_receita = []
-
-    for ano in anos:
-        count = 1
-        for mes in meses:
-            if ano == 2023 and mes not in ["AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]:
-                file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\RECEITA_ATE_{}_{}.csv'.format(
-                    mes, ano)
-                df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
-
-                if count < 10:
-                    df['ds'] = '{}-0{}-01'.format(ano, count)
-                else:
-                    df['ds'] = '{}-{}-01'.format(ano, count)
-            elif ano != 2023:
-                file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\RECEITA_ATE_{}_{}.csv'.format(
-                    mes, ano)
-                df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
-
-                if count < 10:
-                    df['ds'] = '{}-0{}-01'.format(ano, count)
-                else:
-                    df['ds'] = '{}-{}-01'.format(ano, count)
-            # Criar o índice de datas com todos os dias do mês específico
-
-            df['ds'] = pd.to_datetime(df['ds'])
-            if df['Vlr. Receita Prevista'].dtypes == object:
-                df['Vlr. Receita Prevista'] = df['Vlr. Receita Prevista'].str.replace(',', '.').astype(float)
-            if df['Vlr. Receita Realizada'].dtypes == object:
-                df['Vlr. Receita Realizada'] = df['Vlr. Receita Realizada'].str.replace(',', '.').astype(float)
-            if df['% Realizado'].dtypes == object:
-                df['% Realizado'] = df['% Realizado'].str.replace(',', '.').astype(float)
-
-            df_receita.append(df)
-            count += 1
-        count = 0
-    df_receita = pd.concat(df_receita)
-    df_receita = df_receita.loc[df_receita['ds'] <= '2023-08-01']
-    df_receita = df_receita.sort_values(by=['ds', 'Cód. Unidade Gestora'])
-    df_receita = df_receita.drop_duplicates().reset_index(drop=True)
-    for column in df_receita.columns:
-        if df_receita[column].dtypes == object:
-            df_receita[column] = df_receita[column].apply(remove_accent)
-            df_receita[column] = df_receita[column].str.upper()
-            df_receita[column] = df_receita[column].str.strip()
-
-    return df_receita
-
-def read_despesa():
-    meses = [
-        "JANEIRO",
-        "FEVEREIRO",
-        "MARCO",
-        "ABRIL",
-        "MAIO",
-        "JUNHO",
-        "JULHO",
-        "AGOSTO",
-        "SETEMBRO",
-        "OUTUBRO",
-        "NOVEMBRO",
-        "DEZEMBRO"
-    ]
-
-    anos = [2021, 2022, 2023]
-
-    df_despesa = []
-
-
-    for ano in anos:
-        count = 1
-        for mes in meses:
-            if ano == 2023 and mes not in ["AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]:
-
-                file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\DESPESA_PAGA_ATE_{}_{}.csv'.format(
-                    mes, ano)
-                df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
-
-                if count < 10:
-                    df['ds'] = '{}-0{}-01'.format(ano, count)
-                else:
-                    df['ds'] = '{}-{}-01'.format(ano, count)
-            elif ano != 2023:
-                file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\DESPESA_PAGA_ATE_{}_{}.csv'.format(
-                    mes, ano)
-                df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
-
-                if count < 10:
-                    df['ds'] = '{}-0{}-01'.format(ano, count)
-                else:
-                    df['ds'] = '{}-{}-01'.format(ano, count)
-            # Criar o índice de datas com todos os dias do mês específico
-
-            df['ds'] = pd.to_datetime(df['ds'])
-            if df['Valor Empenhado'].dtypes == object:
-                df['Valor Empenhado'] = df['Valor Empenhado'].str.replace(',', '.').astype(float)
-            if df['Valor Liquidado'].dtypes == object:
-                df['Valor Liquidado'] = df['Valor Liquidado'].str.replace(',', '.').astype(float)
-            if df['Valor Pago'].dtypes == object:
-                df['Valor Pago'] = df['Valor Pago'].str.replace(',', '.').astype(float)
-
-            df_despesa.append(df)
-            count += 1
-        count = 0
-    df_despesa = pd.concat(df_despesa)
-    df_despesa = df_despesa.loc[df_despesa['ds'] <= '2023-08-01']
-
-    df_despesa = df_despesa.rename(columns={'Órgão': 'Unidade Gestora'}).groupby(['Unidade Gestora', 'ds']).agg({'Valor Empenhado': 'sum',
-                                                                                                                 'Valor Liquidado': 'sum',
-                                                                                                                 'Valor Pago': 'sum'}).reset_index()
-    df_despesa = df_despesa.sort_values(by=['ds', 'Unidade Gestora'])
-    df_despesa = df_despesa.drop_duplicates().reset_index(drop=True)
-
-    for column in df_despesa.columns:
-        if df_despesa[column].dtypes == object:
-            df_despesa[column] = df_despesa[column].apply(remove_accent)
-            df_despesa[column] = df_despesa[column].str.upper()
-            df_despesa[column] = df_despesa[column].str.strip()
-    return df_despesa
+# def read_receita():
+#     meses = [
+#         "JANEIRO",
+#         "FEVEREIRO",
+#         "MARCO",
+#         "ABRIL",
+#         "MAIO",
+#         "JUNHO",
+#         "JULHO",
+#         "AGOSTO",
+#         "SETEMBRO",
+#         "OUTUBRO",
+#         "NOVEMBRO",
+#         "DEZEMBRO"
+#     ]
+#
+#     anos = [2021, 2022, 2023]
+#
+#     df_receita = []
+#
+#     for ano in anos:
+#         count = 1
+#         for mes in meses:
+#             if ano == 2023 and mes not in ["AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]:
+#                 file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\RECEITA_ATE_{}_{}.csv'.format(
+#                     mes, ano)
+#                 df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
+#
+#                 if count < 10:
+#                     df['ds'] = '{}-0{}-01'.format(ano, count)
+#                 else:
+#                     df['ds'] = '{}-{}-01'.format(ano, count)
+#             elif ano != 2023:
+#                 file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\RECEITA_ATE_{}_{}.csv'.format(
+#                     mes, ano)
+#                 df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
+#
+#                 if count < 10:
+#                     df['ds'] = '{}-0{}-01'.format(ano, count)
+#                 else:
+#                     df['ds'] = '{}-{}-01'.format(ano, count)
+#             # Criar o índice de datas com todos os dias do mês específico
+#
+#             df['ds'] = pd.to_datetime(df['ds'])
+#             if df['Vlr. Receita Prevista'].dtypes == object:
+#                 df['Vlr. Receita Prevista'] = df['Vlr. Receita Prevista'].str.replace(',', '.').astype(float)
+#             if df['Vlr. Receita Realizada'].dtypes == object:
+#                 df['Vlr. Receita Realizada'] = df['Vlr. Receita Realizada'].str.replace(',', '.').astype(float)
+#             if df['% Realizado'].dtypes == object:
+#                 df['% Realizado'] = df['% Realizado'].str.replace(',', '.').astype(float)
+#
+#             df_receita.append(df)
+#             count += 1
+#         count = 0
+#     df_receita = pd.concat(df_receita)
+#     df_receita = df_receita.loc[df_receita['ds'] <= '2023-08-01']
+#     df_receita = df_receita.sort_values(by=['ds', 'Cód. Unidade Gestora'])
+#     df_receita = df_receita.drop_duplicates().reset_index(drop=True)
+#     for column in df_receita.columns:
+#         if df_receita[column].dtypes == object:
+#             df_receita[column] = df_receita[column].apply(remove_accent)
+#             df_receita[column] = df_receita[column].str.upper()
+#             df_receita[column] = df_receita[column].str.strip()
+#
+#     return df_receita
+#
+# def read_despesa():
+#     meses = [
+#         "JANEIRO",
+#         "FEVEREIRO",
+#         "MARCO",
+#         "ABRIL",
+#         "MAIO",
+#         "JUNHO",
+#         "JULHO",
+#         "AGOSTO",
+#         "SETEMBRO",
+#         "OUTUBRO",
+#         "NOVEMBRO",
+#         "DEZEMBRO"
+#     ]
+#
+#     anos = [2021, 2022, 2023]
+#
+#     df_despesa = []
+#
+#
+#     for ano in anos:
+#         count = 1
+#         for mes in meses:
+#             if ano == 2023 and mes not in ["AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]:
+#
+#                 file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\DESPESA_PAGA_ATE_{}_{}.csv'.format(
+#                     mes, ano)
+#                 df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
+#
+#                 if count < 10:
+#                     df['ds'] = '{}-0{}-01'.format(ano, count)
+#                 else:
+#                     df['ds'] = '{}-{}-01'.format(ano, count)
+#             elif ano != 2023:
+#                 file_path = 'C:\\Users\\Jjr_a\\OneDrive\\Documentos\\Estudo\\Forecasting\\Despesa_receita\\DESPESA_PAGA_ATE_{}_{}.csv'.format(
+#                     mes, ano)
+#                 df = pd.read_csv(file_path, encoding='ISO-8859-1', delimiter=';')
+#
+#                 if count < 10:
+#                     df['ds'] = '{}-0{}-01'.format(ano, count)
+#                 else:
+#                     df['ds'] = '{}-{}-01'.format(ano, count)
+#             # Criar o índice de datas com todos os dias do mês específico
+#
+#             df['ds'] = pd.to_datetime(df['ds'])
+#             if df['Valor Empenhado'].dtypes == object:
+#                 df['Valor Empenhado'] = df['Valor Empenhado'].str.replace(',', '.').astype(float)
+#             if df['Valor Liquidado'].dtypes == object:
+#                 df['Valor Liquidado'] = df['Valor Liquidado'].str.replace(',', '.').astype(float)
+#             if df['Valor Pago'].dtypes == object:
+#                 df['Valor Pago'] = df['Valor Pago'].str.replace(',', '.').astype(float)
+#
+#             df_despesa.append(df)
+#             count += 1
+#         count = 0
+#     df_despesa = pd.concat(df_despesa)
+#     df_despesa = df_despesa.loc[df_despesa['ds'] <= '2023-08-01']
+#
+#     df_despesa = df_despesa.rename(columns={'Órgão': 'Unidade Gestora'}).groupby(['Unidade Gestora', 'ds']).agg({'Valor Empenhado': 'sum',
+#                                                                                                                  'Valor Liquidado': 'sum',
+#                                                                                                                  'Valor Pago': 'sum'}).reset_index()
+#     df_despesa = df_despesa.sort_values(by=['ds', 'Unidade Gestora'])
+#     df_despesa = df_despesa.drop_duplicates().reset_index(drop=True)
+#
+#     for column in df_despesa.columns:
+#         if df_despesa[column].dtypes == object:
+#             df_despesa[column] = df_despesa[column].apply(remove_accent)
+#             df_despesa[column] = df_despesa[column].str.upper()
+#             df_despesa[column] = df_despesa[column].str.strip()
+#     return df_despesa
 
 
 def get_date_range(start_date, end_date):

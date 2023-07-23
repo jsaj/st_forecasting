@@ -1,4 +1,3 @@
-from import_packages import *
 from functions import *
 
 st.set_page_config(
@@ -8,15 +7,15 @@ st.set_page_config(
 # @st.cache(allow_output_mutation=True)
 # @st.cache_data
 def load_data():
-    df_despesa = read_despesa()
-    df_receita = read_receita()
+    df_despesa = pd.read_csv('https://raw.githubusercontent.com/jsaj/st_forecasting/master/datasets/despesa.csv')
+    df_receita = pd.read_csv('https://raw.githubusercontent.com/jsaj/st_forecasting/master/datasets/receita.csv')
     return df_despesa, df_receita
 
     # Carrega os dados ou utiliza os dados em cache
 df_despesa, df_receita = load_data()
 
 df_receita_despesa = df_receita.merge(df_despesa, how='left', on=['ds', 'Unidade Gestora']).fillna(0)
-
+df_receita_despesa['ds'] = pd.to_datetime(df_receita_despesa['ds'])
 
 # Lista com todas as opções únicas da coluna 'Cód. Unidade Gestora'
 opcoes_unidade_gestora = list(df_receita_despesa['Unidade Gestora'].drop_duplicates())
@@ -70,8 +69,7 @@ else:
         predictions = predict_prophet(df=df_filtrado, n_periods=n_periods, exog_var=None)
 
 
-st.write(df_filtrado[['ds', 'y']].tail())
-st.write(predictions)
+st.write(df_filtrado)
 #
 # # Criar o gráfico de linhas
 fig = go.Figure()

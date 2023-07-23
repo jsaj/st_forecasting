@@ -1,3 +1,10 @@
 vega-datasets
 streamlit
 unidecode
+statsmodels
+pandas
+datetime
+prophet
+plotly
+matplotlib
+numpy
