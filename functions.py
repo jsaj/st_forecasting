@@ -1,7 +1,7 @@
-
 import re
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 from prophet import Prophet
@@ -13,9 +13,11 @@ from unidecode import unidecode
 def remove_accent(text):
     return unidecode(text)
 
+
 # Função para remover caracteres especiais usando expressões regulares
 def remove_special_characters(text):
     return re.sub(r'[^a-zA-Z0-9\s]', '', text)
+
 
 # Função para simplificar o nome em caso de repetição de letras
 def simplify_name(name):
@@ -24,9 +26,12 @@ def simplify_name(name):
             return name[:i]
     return name
 
+
 # Função que aplica a simplificação apenas para as linhas com "repeat_count" maior que 1
 def replace_value_by_id(df, id_col, id_name):
-    return df.groupby(id_col)[id_name].transform(lambda x: simplify_name(x.iloc[0]) if x.iloc[0].count(r"(.)\1+") > 1 else x.iloc[0])
+    return df.groupby(id_col)[id_name].transform(
+        lambda x: simplify_name(x.iloc[0]) if x.iloc[0].count(r"(.)\1+") > 1 else x.iloc[0])
+
 
 # def read_receita():
 #     meses = [
@@ -180,9 +185,10 @@ def get_date_range(start_date, end_date):
 
     return dates_list
 
+
 def create_test_data(train, n_periods, exog_var):
     start_date = datetime.now().replace(day=1) + relativedelta(months=1)
-    end_date = start_date + relativedelta(months=n_periods-1)
+    end_date = start_date + relativedelta(months=n_periods - 1)
 
     start_date = start_date.strftime('%Y-%m-%d')
     end_date = end_date.strftime('%Y-%m-%d')
@@ -195,15 +201,19 @@ def create_test_data(train, n_periods, exog_var):
 
     return test
 
-def predict_ARIMA(df, n_periods, exog_var=None):
 
+def predict_ARIMA(df, n_periods, type_periods, exog_var=None):
     # # Obter o mês atual em formato de número (de 1 a 12)
 
     # Separação dos dados em conjuntos de treinamento e teste
     # train = df.loc[df['ds'] < f'2023-0{mes_atual - n_periods}-01']
     # test = df.loc[df['ds'] >= f'2023-0{mes_atual - n_periods}-01']
     train = df
-    test = create_test_data(train, n_periods, exog_var)
+    if type_periods == 'Mensal':
+        test = create_test_data(train, n_periods, exog_var)
+    else:
+        n_periods = n_periods*6
+        test = create_test_data(train, n_periods, exog_var)
     # Obter a data atual no formato 'ano-mes-dia', onde o dia é 01
 
     # Configura a coluna "ds" como índice do conjunto de treinamento
@@ -227,16 +237,17 @@ def predict_ARIMA(df, n_periods, exog_var=None):
     predicted_values = forecast.predicted_mean
     predictions = []
     for i, date in enumerate(predicted_values.index):
-
         predictions.append([date, predicted_values.iloc[i]])
 
     predictions = pd.DataFrame(predictions, columns=['ds', 'yhat'])
     # predictions = test.merge(predictions, how='left', on=['ds'])
     # print(train.reset_index().rename(columns={'y': 'yhat'})[predictions.columns].tail(1))
-    predictions = pd.concat([train.reset_index().rename(columns={'y': 'yhat'})[predictions.columns].tail(1), predictions])
+    predictions = pd.concat(
+        [train.reset_index().rename(columns={'y': 'yhat'})[predictions.columns].tail(1), predictions])
     return predictions
 
-def predict_prophet(df, n_periods, exog_var=None):
+
+def predict_prophet(df, n_periods, type_periods, exog_var=None):
     # Criar o modelo de previsão
     model = Prophet()
 
@@ -246,14 +257,92 @@ def predict_prophet(df, n_periods, exog_var=None):
 
     # Treinar o modelo
     train = df
-    test = create_test_data(train, n_periods, exog_var)
+    if type_periods == 'Mensal':
+        test = create_test_data(train, n_periods, exog_var)
+    else:
+        test = create_test_data(train, n_periods*6, exog_var)
 
     model.fit(train)
 
     predictions = model.predict(test)
 
-
     predictions = predictions[['ds', 'yhat']]
     predictions = pd.concat(
         [train.rename(columns={'y': 'yhat'})[predictions.columns].tail(1), predictions])
     return predictions
+
+
+# def predict_LSTM(df, n_periods, exog_var=None):
+#
+#     X = train["ds"].values.astype(np.int64) // 10 ** 9  # Convert datetime to timestamp in seconds
+#     X = X.reshape(-1, 1)  # Reshape to fit LSTM input requirements
+#     y = train["y"].values
+#
+#     # Create the neural network
+#     model = Sequential()
+#     model.add(
+#         LSTM(10, input_shape=(1, 1), activation="relu"))  # Input shape needs to be (batch_size, timesteps, input_dim)
+#     model.add(Dense(1, activation="linear"))
+#
+#     # Compile the neural network
+#     model.compile(optimizer="adam", loss="mse")
+#
+#     # Train the neural network
+#     model.fit(X, y, epochs=100)
+#
+#     # Predict the next two months of data
+#     next_two_months = pd.date_range(start="2023-07-01", end="2023-09-01", freq="M").values.astype(np.int64) // 10 ** 9
+#     next_two_months = next_two_months.reshape(-1, 1)
+#     predictions = model.predict(next_two_months)
+
+def processing_columns_values(df, op_data):
+    for col in df.columns:
+        if df[col].dtypes == object:
+            df[col] = df[col].apply(remove_accent)
+            df[col] = df[col].apply(remove_special_characters)
+            df[col] = df[col].str.upper()
+    if op_data == 'Receitas':
+        df['ESPÉCIE DA RECEITA'] = df['ESPÉCIE DA RECEITA'].str.replace('OUTRAS TRANSFERENCIAS CORRENTES', 'OTC')
+        df['ESPÉCIE DA RECEITA'] = np.where(
+            ~df['ESPÉCIE DA RECEITA'].isin(['FPM', 'OTC', 'ISS', 'FUNDEB', 'ICMS', 'CONTRIBUICOES SOCIAIS']),
+            'DEMAIS RECEITAS',
+            df['ESPÉCIE DA RECEITA'])
+    else:
+        df['NATUREZA'] = np.where(~df['NATUREZA'].isin(['OUTRAS DESPESAS CORRENTES',
+                                                        'PESSOAL E ENCARGOS SOCIAIS']),
+                                  'DEMAIS DESPESAS',
+                                  df['NATUREZA'])
+    return df
+
+def processing_data(df, op_data, filtro_type_data):
+    if op_data == 'Receitas':
+        if filtro_type_data != 'TODAS':
+            df = df.loc[(df['ESPÉCIE DA RECEITA'] == filtro_type_data)
+                        & (df['VALOR DA RECEITA'] > 0)].groupby(['MÊS/ANO'])[
+                'VALOR DA RECEITA'].sum().reset_index()
+        else:
+            df = df.groupby(['MÊS/ANO'])['VALOR DA RECEITA'].sum().reset_index()
+
+    else:
+
+        if filtro_type_data != 'TODOS':
+            df = df.loc[df['NATUREZA'] == filtro_type_data].groupby(['MÊS/ANO'])[
+                'VALOR DA DESPESA'].sum().reset_index()
+        else:
+            df = df.groupby(['MÊS/ANO'])['VALOR DA DESPESA'].sum().reset_index()
+    return df
+
+def create_exog_table(df, df_filtrado, op_data, exog_var):
+    if op_data == 'Receitas':
+        df_exog = df.loc[df['ESPÉCIE DA RECEITA'] == exog_var]. groupby(['MÊS/ANO'])['VALOR DA RECEITA'].sum().reset_index()
+
+        df_exog.columns = ['ds', 'y']
+        df_exog = df_exog.merge(df_filtrado, how='right', on=['ds'])
+        df_exog.columns = ['ds',  exog_var, 'y']
+    else:
+        df_exog = df.loc[df['NATUREZA'] == exog_var].groupby(['MÊS/ANO'])['VALOR DA DESPESA'].sum().reset_index()
+        df_exog.columns = ['ds', 'y']
+        df_exog = df_exog.merge(df_filtrado, how='right', on=['ds'])
+        df_exog.columns = ['ds', exog_var, 'y']
+
+    return df_exog

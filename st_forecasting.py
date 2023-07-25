@@ -1,4 +1,4 @@
-import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 
 from functions import *
@@ -7,94 +7,149 @@ st.set_page_config(
     page_title="Time series annotations", page_icon="⬇"
 )
 
+
 # @st.cache(allow_output_mutation=True)
-# @st.cache_data
-def load_data():
-    df_despesa = pd.read_csv('https://raw.githubusercontent.com/jsaj/st_forecasting/master/datasets/despesa.csv')
-    df_receita = pd.read_csv('https://raw.githubusercontent.com/jsaj/st_forecasting/master/datasets/receita.csv')
-    return df_despesa, df_receita
+@st.cache_data
+def load_data(op_data):
+    # df_despesa = pd.read_csv('https://raw.githubusercontent.com/jsaj/st_forecasting/master/datasets/despesa.csv')
+    # df_receita = pd.read_csv('https://raw.githubusercontent.com/jsaj/st_forecasting/master/datasets/receita.csv')
+    df = pd.read_excel(
+        'https://onedrive.live.com/download?resid=71AA33284B297464%21422&authkey=!ABm-ikjLePrrS74&excel=2.xslx',
+        sheet_name='{}'.format(op_data))
+    return df
 
-    # Carrega os dados ou utiliza os dados em cache
-df_despesa, df_receita = load_data()
 
-df_receita_despesa = df_receita.merge(df_despesa, how='left', on=['ds', 'Unidade Gestora']).fillna(0)
-df_receita_despesa['ds'] = pd.to_datetime(df_receita_despesa['ds'])
+# Criar uma barra deslizante (slider) para selecionar qual será a previsão: receitas ou despesas
+op_data = st.sidebar.selectbox('O que deseja prever?', ['Receitas', 'Despesas'])
 
-# Lista com todas as opções únicas da coluna 'Cód. Unidade Gestora'
-opcoes_unidade_gestora = list(df_receita_despesa['Unidade Gestora'].drop_duplicates())
+# Carrega os dados ou utiliza os dados em cache
+df = load_data(op_data)
 
-# Sidebar com o filtro
-filtro_unidade_gestora = st.sidebar.selectbox('Unidade Gestora: ',
-                                              opcoes_unidade_gestora,
-                                              index=opcoes_unidade_gestora.index('FUNDO MUNICIPAL DE SAUDE'))
+df_filtrado = processing_columns_values(df, op_data)
 
-# Sidebar com o filtro dos meses de previsão
-n_periods = st.sidebar.selectbox('Meses de previsão: ', list(range(1, 13)))
+# df_receita_despesa = df_receita.merge(df_despesa, how='left', on=['ds', 'Unidade Gestora']).fillna(0)
+# df_receita_despesa['ds'] = pd.to_datetime(df_receita_despesa['ds'])
+
+if op_data == 'Despesas':
+    # Sidebar com o filtro
+    list_to_filter = ['TODOS'] + list(df['NATUREZA'].drop_duplicates())
+    filtro_type_data = st.sidebar.selectbox('Elemento: ',
+                                            list_to_filter,
+                                            index=list_to_filter.index(
+                                                'TODOS'))
+else:
+    list_to_filter = ['TODAS'] + list(df['ESPÉCIE DA RECEITA'].drop_duplicates())
+    filtro_type_data = st.sidebar.selectbox('Espécie da Receita:', list_to_filter,
+                                            index=list_to_filter.index('TODAS'))
+
+df_filtrado = processing_data(df, op_data, filtro_type_data)
+st.write(df.head())
+st.write(df_filtrado.head())
+
+type_periods = st.sidebar.selectbox('Qual o intervalo da previsão? ', ['Mensal', 'Semestral'])
+if type_periods == 'Mensal':
+    # Sidebar com o filtro dos meses de previsão
+    n_periods = st.sidebar.selectbox('Quantos meses?', list(range(1, 13)))
+else:
+    # Sidebar com o filtro dos semestres de previsão
+    n_periods = st.sidebar.selectbox('Quantos semestres? ', list(range(1, 13)))
+
+# Renomear as colunas para que o modelo possa reconhecê-las
+df_filtrado.columns = ['ds', 'y']
 
 # Criar uma barra deslizante (slider) para selecionar a variável exógerna
 model_name = st.sidebar.selectbox('Modelo preditivo:', ['ARIMA', 'Prophet'])
 
-# Filtrar o DataFrame com base nas opções selecionadas no filtro
-df_filtrado = df_receita_despesa[df_receita_despesa['Unidade Gestora'] == filtro_unidade_gestora]
-
-# Renomear as colunas para que o modelo possa reconhecê-las
-df_filtrado = df_filtrado.rename(columns={'Vlr. Receita Realizada': 'y'})
-
-# Criar uma barra deslizante (slider) para selecionar a variável exógerna
-op_exog = st.sidebar.selectbox('Usar variável exógena?:', ['Sim', 'Não'])
-
-if op_exog == 'Sim':
-
+if filtro_type_data in ['TODAS', 'TODOS']:
     # Criar uma barra deslizante (slider) para selecionar a variável exógerna
-    exog_var = st.sidebar.selectbox('Variável exógena:', ['Valor Empenhado', 'Valor Liquidado', 'Valor Pago'])
+    op_exog = st.sidebar.selectbox('Usar variável exógena?:', ['Sim', 'Não'], index=list(['Sim', 'Não']).index('Não'))
 
-    # Criar uma barra deslizante (slider) para selecionar a porcentagem
-    porcentagem = st.sidebar.slider('% vs. Var. Exógena:', min_value=0, max_value=100, value=100, step=1)
-
-    # Aplicar a função ao DataFrame para criar uma nova coluna com os valores multiplicados
-    df_filtrado[exog_var] = df_filtrado[exog_var] * (porcentagem / 100)
-
-    # Criar o modelo de previsão
-    if model_name == 'ARIMA':
-        predictions = predict_ARIMA(df=df_filtrado, n_periods=n_periods, exog_var=exog_var)
-        df_filtrado = df_filtrado.reset_index()
-    elif model_name == 'Prophet':
-        predictions = predict_prophet(df=df_filtrado, n_periods=n_periods, exog_var=exog_var)
+    if op_exog == 'Sim':
+        # Criar uma barra deslizante (slider) para selecionar a variável exógerna
+        if op_data == 'Receitas':
+            exog_var = st.sidebar.selectbox('Variável exógena:', list(df['ESPÉCIE DA RECEITA'].drop_duplicates()))
+        else:
+            exog_var = st.sidebar.selectbox('Variável exógena:', list(df['NATUREZA'].drop_duplicates()))
 
 
+        df_to_predict = create_exog_table(df, df_filtrado, op_data, exog_var)
+        # Criar uma barra deslizante (slider) para selecionar a porcentagem
+        porcentagem = st.sidebar.slider('% vs. Var. Exógena:', min_value=0, max_value=100, value=100, step=1)
+
+        # Aplicar a função ao DataFrame para criar uma nova coluna com os valores multiplicados
+        df_to_predict[exog_var] = df_to_predict[exog_var] * (porcentagem / 100)
+
+        st.write(df_to_predict)
+        # Criar o modelo de previsão
+        if model_name == 'ARIMA':
+            predictions = predict_ARIMA(df=df_to_predict, n_periods=n_periods, type_periods=type_periods, exog_var=exog_var)
+            df_to_predict = df_to_predict.reset_index()
+        elif model_name == 'Prophet':
+            predictions = predict_prophet(df=df_to_predict, n_periods=n_periods, type_periods=type_periods, exog_var=exog_var)
+
+    else:
+
+        # Criar o modelo de previsão
+        if model_name == 'ARIMA':
+            predictions = predict_ARIMA(df=df_filtrado, n_periods=n_periods, type_periods=type_periods, exog_var=None)
+            df_filtrado = df_filtrado.reset_index()
+        elif model_name == 'Prophet':
+            predictions = predict_prophet(df=df_filtrado, n_periods=n_periods, type_periods=type_periods, exog_var=None)
 else:
-
     # Criar o modelo de previsão
     if model_name == 'ARIMA':
-        predictions = predict_ARIMA(df=df_filtrado, n_periods=n_periods, exog_var=None)
+        predictions = predict_ARIMA(df=df_filtrado, n_periods=n_periods, type_periods=type_periods, exog_var=None)
         df_filtrado = df_filtrado.reset_index()
     elif model_name == 'Prophet':
-        predictions = predict_prophet(df=df_filtrado, n_periods=n_periods, exog_var=None)
+        predictions = predict_prophet(df=df_filtrado, n_periods=n_periods, type_periods=type_periods, exog_var=None)
 
+# st.write(df_filtrado)
 
-st.write(df_filtrado)
+# Converter valores para milhões (M) ou milhares (K)
 
-#
-# # Criar o gráfico de linhas
-fig = go.Figure()
+def format_value(value):
+    if abs(value) >= 1e6:
+        return '{:.2f}M'.format(value / 1e6)
+    elif abs(value) >= 1e3:
+        return '{:.2f}K'.format(value / 1e3)
+    else:
+        return '{:.2f}'.format(value)
 
-# Adicionar a série original de receita realizada
-fig.add_trace(go.Scatter(x=df_filtrado['ds'], y=df_filtrado['y'], mode='lines', name='Receita Realizada', line=dict(color='blue')))
+# Criar o gráfico de linhas usando Plotly Express
+fig = px.line(df_filtrado, x='ds', y='y', text=[format_value(val) for val in df_filtrado['y']],
+              labels={'y': '{} atuais'.format(op_data)},
+              title='{} atuais vs. {} preditas'.format(op_data, op_data))
 
 # Adicionar a série de previsão de receita
-fig.add_trace(go.Scatter(x=predictions['ds'], y=predictions['yhat'], mode='lines', name='Receita Predita', line=dict(color='green')))
+fig.add_scatter(x=predictions['ds'], y=predictions['yhat'], mode='lines+text', text=[format_value(val) for val in predictions['yhat']],
+                name='{} preditas'.format(op_data))
 
 # Personalizar layout do gráfico
-fig.update_layout(title='Receita Realizada vs. Receita Predita',
-                  xaxis_title='Data',
-                  yaxis_title='Receita',
-                  showlegend=True)
+fig.update_traces(textposition='top center')
+fig.update_layout(xaxis_title='Mês-Ano', yaxis_title='{}'.format(op_data), showlegend=True)
 
 # Exibir o gráfico usando Streamlit
 st.plotly_chart(fig)
 
+# Calcular a média da previsão
+mean_prediction = predictions['yhat'].mean()
 
+df_filtrado = df_filtrado.loc[df_filtrado['ds'] >= '2023-01-01']
+# Criar o gráfico de barras usando Plotly Express
+fig = px.bar(df_filtrado, x='ds', y='y', text=[format_value(val) for val in df_filtrado['y']],
+             labels={'y': '{} atuais'.format(op_data)},
+             title='{} atuais vs. {} preditas - Média de previsão: {}'.format(op_data, op_data, format_value(mean_prediction)))
 
+# Adicionar a série de previsão de receita
+fig.add_bar(x=predictions['ds'], y=predictions['yhat'], text=[format_value(val) for val in predictions['yhat']],
+            name='{} preditas'.format(op_data))
+
+# Personalizar layout do gráfico
+fig.update_traces(textposition='outside')
+fig.update_layout(xaxis_title='Mês-Ano', yaxis_title='{}'.format(op_data), showlegend=True)
+
+# Exibir o gráfico usando Streamlit
+st.plotly_chart(fig)
 
 # m = Prophet()
 #
